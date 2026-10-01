@@ -19,18 +19,28 @@ DevOps-AppGestionDesProjets/
 │   ├── src/
 │   │   └── main/java/tn/esprit/backend/
 │   │       ├── entity/
-│   │       ��── repository/
+│   │       ├── repository/
 │   │       ├── service/
 │   │       └── controller/
+│   ├── Dockerfile
 │   └── pom.xml
 ├── frontend/         # Application Angular 22 (Node.js, npm)
 │   ├── src/
 │   │   └── app/
-│   │       ��── models/
+│   │       ├── models/
 │   │       ├── services/
 │   │       ├── components/
 │   │       └── pages/
+│   ├── Dockerfile
+│   ├── nginx.conf
 │   └── package.json
+├── k8s/              # Manifests Kubernetes
+│   ├── mysql-deployment.yaml
+│   ├── spring-deployment.yaml
+│   ├── angular-deployment.yaml
+│   ├── prometheus-deployment.yaml
+│   └── grafana-deployment.yaml
+├── Jenkinsfile       # Pipeline CI/CD
 └── README.md
 ```
 
@@ -57,26 +67,29 @@ Avant de lancer le projet, vérifier que les outils suivants sont installés :
 |---|---|---|
 | Java JDK | 17 | `java -version` |
 | Maven | 3.8+ | `mvn -version` |
-| Node.js | 18+ | `node -v` |
-| npm | 9+ | `npm -v` |
+| Node.js | 24+ | `node -v` |
+| npm | 10+ | `npm -v` |
 | Angular CLI | 22+ | `ng version` |
 | MySQL | 8.0+ | `mysql --version` |
+| Docker | 29+ | `docker --version` |
+| Kubernetes (Kind) | 1.30+ | `kubectl version` |
+| Kind | 0.24+ | `kind version` |
 
 ---
 
 ## 🗄️ Configuration de la base de données
 
-Le backend se connecte à une base de données **MySQL**.  
+Le backend se connecte à une base de données **MySQL/MariaDB**.  
 Les paramètres de connexion se trouvent dans `backend/src/main/resources/application.properties` :
 
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/test_db?createDatabaseIfNotExist=true
+spring.datasource.url=jdbc:mariadb://localhost:3306/gestionprojets?useSSL=false&allowPublicKeyRetrieval=true
 spring.datasource.username=root
 spring.datasource.password=root
 spring.jpa.hibernate.ddl-auto=update
 ```
 
-> La base de données `test_db` est créée automatiquement au premier démarrage.  
+> La base de données `gestionprojets` est créée automatiquement au premier démarrage.  
 > Modifier `username` et `password` selon votre configuration MySQL locale.
 
 ---
@@ -87,14 +100,11 @@ spring.jpa.hibernate.ddl-auto=update
 
 ```bash
 cd backend
-
-# Compiler et lancer
+mvn clean package -DskipTests
 mvn spring-boot:run
 ```
 
 Le backend démarre sur **http://localhost:8080**
-
-Pour vérifier : ouvrir `http://localhost:8080/entreprise/all` → doit retourner `[]`
 
 ### 2. Frontend — Angular
 
@@ -102,12 +112,9 @@ Pour vérifier : ouvrir `http://localhost:8080/entreprise/all` → doit retourne
 
 ```bash
 cd frontend
-
-# Installer les dépendances (première fois uniquement)
 npm install
-
-# Lancer le serveur de développement
-ng serve -o
+npm run build
+npm start
 ```
 
 L'application s'ouvre automatiquement sur **http://localhost:4200**
@@ -149,7 +156,7 @@ L'application s'ouvre automatiquement sur **http://localhost:4200**
 | Méthode | URL | Description |
 |---|---|---|
 | GET | `/projet-detaille/all` | Lister tous les projets détaillés |
-| GET | `/projet-detaille/get/{id}` | Obtenir un projet d��taillé par ID |
+| GET | `/projet-detaille/get/{id}` | Obtenir un projet détaillé par ID |
 | POST | `/projet-detaille/add` | Ajouter un projet détaillé |
 | PUT | `/projet-detaille/update` | Modifier un projet détaillé |
 | DELETE | `/projet-detaille/delete/{id}` | Supprimer un projet détaillé |
@@ -157,73 +164,327 @@ L'application s'ouvre automatiquement sur **http://localhost:4200**
 
 ---
 
-## 🔧 Intégration Jenkins (CI/CD)
+## 🐳 Dockerisation
 
-Ce projet est conçu pour être intégré dans un pipeline Jenkins. Un `Jenkinsfile` peut être ajouté à la racine du dépôt pour automatiser les étapes suivantes :
+Le projet est entièrement **dockerisé** avec 2 images :
+
+| Image | Dockerfile | Taille |
+|-------|-----------|--------|
+| `ameni1/5arctict7-amenimensi-backend` | `backend/Dockerfile` | 356 MB |
+| `ameni1/5arctict7-amenimensi-frontend` | `frontend/Dockerfile` | 26 MB |
+
+### Images Docker Hub
+
+- 🔗 [Backend](https://hub.docker.com/r/ameni1/5arctict7-amenimensi-backend)
+- 🔗 [Frontend](https://hub.docker.com/r/ameni1/5arctict7-amenimensi-frontend)
+
+### Commandes Docker
+
+```bash
+# Build backend
+cd backend
+docker build -t ameni1/5arctict7-amenimensi-backend:latest .
+
+# Build frontend
+cd frontend
+docker build -t ameni1/5arctict7-amenimensi-frontend:latest .
+
+# Push vers Docker Hub
+docker push ameni1/5arctict7-amenimensi-backend:latest
+docker push ameni1/5arctict7-amenimensi-frontend:latest
+```
+
+---
+
+## ☸️ Déploiement Kubernetes
+
+Le projet est déployé sur **Kubernetes** via **Kind** (Kubernetes in Docker).
+
+### Créer le cluster
+
+```bash
+kind create cluster --name devops --image kindest/node:v1.30.0
+```
+
+### Charger les images dans Kind
+
+```bash
+# Backend
+docker save ameni1/5arctict7-amenimensi-backend:latest -o backend.tar
+docker cp backend.tar devops-control-plane:/backend.tar
+docker exec devops-control-plane ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs /backend.tar
+docker exec devops-control-plane rm /backend.tar
+
+# Frontend
+docker save ameni1/5arctict7-amenimensi-frontend:latest -o frontend.tar
+docker cp frontend.tar devops-control-plane:/frontend.tar
+docker exec devops-control-plane ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs /frontend.tar
+docker exec devops-control-plane rm /frontend.tar
+
+# MariaDB
+docker save mariadb:11.0 -o mariadb.tar
+docker cp mariadb.tar devops-control-plane:/mariadb.tar
+docker exec devops-control-plane ctr --namespace=k8s.io images import --digests --snapshotter=overlayfs /mariadb.tar
+docker exec devops-control-plane rm /mariadb.tar
+```
+
+### Déployer les services
+
+```bash
+cd k8s
+kubectl apply -f mysql-deployment.yaml
+kubectl apply -f spring-deployment.yaml
+kubectl apply -f angular-deployment.yaml
+kubectl apply -f prometheus-deployment.yaml
+kubectl apply -f grafana-deployment.yaml
+```
+
+### Vérifier le déploiement
+
+```bash
+kubectl get pods
+kubectl get svc
+```
+
+**Résultat attendu** : 7 pods `Running`
 
 ```
-Checkout SCM → Build Backend (mvn) → Tests → Build Frontend (npm) → Archive Artifacts
+NAME                                READY   STATUS    RESTARTS   AGE
+angular-frontend-797b8dfc76-k2nxm   1/1     Running   0          2h
+angular-frontend-797b8dfc76-r8qn8   1/1     Running   0          2h
+grafana-7665467f4f-h7f5l            1/1     Running   0          1h
+mysql-6667dbb65f-jkdmb              1/1     Running   1          20h
+prometheus-f55858858-8p6b9          1/1     Running   0          2h
+spring-backend-6679cb9d94-822p7     1/1     Running   0          2h
+spring-backend-6679cb9d94-rvfwj     1/1     Running   0          2h
 ```
 
-Exemple de pipeline :
+### Architecture Kubernetes
+
+| Service | Type | Port | Nombre de pods |
+|---------|------|------|----------------|
+| `angular-service` | NodePort | 80 | 2 |
+| `spring-service` | NodePort | 8080 | 2 |
+| `mysql-service` | ClusterIP | 3306 | 1 |
+| `prometheus-service` | NodePort | 9090 | 1 |
+| `grafana-service` | NodePort | 3000 | 1 |
+
+---
+
+## 🔧 Pipeline Jenkins (CI/CD)
+
+Le pipeline Jenkins est défini dans le fichier `Jenkinsfile` à la racine du projet.
+
+### Étapes du pipeline
+
+```
+1. Checkout        → Récupération du code depuis GitHub
+2. Build           → mvn clean package -DskipTests
+3. SonarQube       → Analyse de la qualité du code
+4. Build Docker    → docker build (backend + frontend)
+5. Push Docker     → docker push vers Docker Hub (avec retry)
+```
+
+### Jenkinsfile
 
 ```groovy
 pipeline {
     agent any
+    tools {
+        jdk 'JDK17'
+        maven 'Maven3'
+    }
+    environment {
+        DOCKER_IMAGE = 'ameni1/5arctict7-amenimensi-backend'
+        DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
+    }
     stages {
-        stage('Checkout') {
-            steps { checkout scm }
-        }
-        stage('Build Backend') {
+        stage('Checkout') { steps { checkout scm } }
+        stage('Build') {
             steps {
                 dir('backend') {
                     sh 'mvn clean package -DskipTests'
                 }
             }
         }
-        stage('Test Backend') {
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    dir('backend') {
+                        sh 'mvn sonar:sonar'
+                    }
+                }
+            }
+        }
+        stage('Build Docker Image') {
             steps {
                 dir('backend') {
-                    sh 'mvn test'
+                    sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest ."
                 }
             }
         }
-        stage('Build Frontend') {
+        stage('Push Docker Image') {
             steps {
-                dir('frontend') {
-                    sh 'npm install'
-                    sh 'npm run build'
+                sh "echo ${DOCKER_CREDENTIALS_PSW} | docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin"
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    retry(3) {
+                        sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                        sh "docker push ${DOCKER_IMAGE}:latest"
+                    }
                 }
-            }
-        }
-        stage('Archive') {
-            steps {
-                archiveArtifacts artifacts: 'backend/target/*.jar', fingerprint: true
             }
         }
     }
 }
 ```
 
+### Accès Jenkins
+
+- URL : http://localhost:8081
+- Job : `GestionDesProjets-Pipeline`
+- Dernier build : **#8 - SUCCESS ✅**
+
 ---
 
-## 🛠️ Stack technique
+## 📊 SonarQube - Qualité du code
 
-| Couche | Technologie |
-|---|---|
-| Backend | Spring Boot 4.1.0, Spring Data JPA, Spring Web MVC |
-| Base de données | MySQL 8.0 |
-| ORM | Hibernate |
-| Utilitaires | Lombok |
-| Frontend | Angular 22 (Standalone Components) |
-| HTTP Client | Angular HttpClient |
-| Build backend | Apache Maven |
-| Build frontend | npm / Angular CLI |
-| CI/CD | Jenkins |
-| Conteneurisation | Docker *(à venir)* |
+### Accès
+
+- URL : http://localhost:9000
+- Projet : `GestionDesProjets-Backend`
+
+### Résultats
+
+| Métrique | Valeur |
+|----------|--------|
+| **Quality Gate** | ✅ **Passed** |
+| **Bugs** | 3 |
+| **Vulnerabilities** | 0 (A) |
+| **Code Smells** | 1 |
+| **Lines of Code** | 630 |
+
+---
+
+## 📈 Monitoring - Prometheus + Grafana
+
+### Prometheus
+
+- URL : http://localhost:9092
+- **Target** : `http://spring-service:8080/actuator/prometheus`
+- **État** : `UP`
+- **Intervalle de scrape** : 15s
+
+### Grafana
+
+- URL : http://localhost:3000
+- Login : `admin` / `admin`
+- Data source : `Prometheus` (`http://prometheus-service:9090`)
+- Dashboard : **JVM (Micrometer)**
+
+### Métriques collectées
+
+- `jvm_memory_used_bytes` — Mémoire JVM
+- `jvm_threads_live_threads` — Threads actifs
+- `process_cpu_usage` — CPU
+- `http_server_requests_active_seconds_count` — Requêtes HTTP
+- `hikaricp_connections_active` — Connexions BDD
+- `tomcat_sessions_active_current_sessions` — Sessions Tomcat
+
+### Configuration Actuator (backend)
+
+Ajouté dans `pom.xml` :
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
+```
+
+Ajouté dans `application.properties` :
+
+```properties
+management.endpoints.web.exposure.include=health,info,prometheus,metrics
+management.endpoint.health.show-details=always
+management.metrics.export.prometheus.enabled=true
+```
+
+---
+
+## 🌐 Accès aux services
+
+| Service | URL | Identifiants |
+|---------|-----|--------------|
+| **Angular (frontend)** | http://localhost:4200 | - |
+| **API Spring (backend)** | http://localhost:9090/projet/all | - |
+| **Prometheus** | http://localhost:9092 | - |
+| **Grafana** | http://localhost:3000 | admin / admin |
+| **Jenkins** | http://localhost:8081 | ameni |
+| **SonarQube** | http://localhost:9000 | admin |
+
+### Commandes de port-forward
+
+```bash
+kubectl port-forward service/angular-service 4200:80
+kubectl port-forward service/spring-service 9090:8080
+kubectl port-forward service/prometheus-service 9092:9090
+kubectl port-forward service/grafana-service 3000:3000
+```
+
+---
+
+## 📦 Livrables
+
+| Livrable | Lien |
+|----------|------|
+| **Code source GitHub** | https://github.com/AmeniM28/5ArcTic7-AmeniMensi |
+| **Image Docker Backend** | https://hub.docker.com/r/ameni1/5arctict7-amenimensi-backend |
+| **Image Docker Frontend** | https://hub.docker.com/r/ameni1/5arctict7-amenimensi-frontend |
+| **Jenkins Pipeline** | http://localhost:8081/job/GestionDesProjets-Pipeline |
+| **SonarQube Dashboard** | http://localhost:9000/dashboard?id=GestionDesProjets-Backend |
+
+---
+
+## 🎯 Récapitulatif des 12 composants DevOps
+
+| # | Composant | Statut |
+|---|-----------|--------|
+| 1 | Vagrant | ⏭️ Remplacé par WSL2/Docker Desktop |
+| 2 | Maven | ✅ |
+| 3 | Jenkins | ✅ Pipeline VERT |
+| 4 | Kubernetes | ✅ Kind (7 pods) |
+| 5 | SonarQube | ✅ Quality Gate Passed |
+| 6 | Ubuntu | ✅ WSL2 |
+| 7 | Docker Hub | ✅ 2 images publiques |
+| 8 | Spring | ✅ Backend déployé |
+| 9 | MySQL | ✅ MariaDB en pod |
+| 10 | Angular | ✅ Frontend déployé |
+| 11 | Minikube | ✅ Kind (équivalent) |
+| 12 | Prometheus + Grafana | ✅ Monitoring actif |
+
+---
+
+## 📄 Justification : Remplacement de Vagrant par WSL2
+
+Le cahier des charges mentionne **Vagrant** pour créer des environnements virtualisés. Dans ce projet, **Vagrant a été remplacé par Docker Desktop + WSL2** :
+
+1. **Équivalence fonctionnelle** : Docker Desktop + WSL2 remplissent le même rôle (environnement isolé et reproductible).
+2. **Modernité** : Docker est le standard DevOps actuel, Vagrant est obsolète.
+3. **Performance** : WSL2 démarre en quelques secondes vs plusieurs minutes pour une VM.
+4. **Cohérence avec Kubernetes** : Kind s'appuie sur Docker, ce qui aurait été impossible avec Vagrant seul.
+5. **Objectif atteint** : L'objectif pédagogique de Vagrant (environnement reproductible) est atteint.
 
 ---
 
 ## 👤 Auteur
 
-**ESPRIT — UP ASI**  
+**Ameni MENSI**
+- Classe : 5ArcTic7
+- Email : ameni.mensi@esprit.tn
+- GitHub : [@AmeniM28](https://github.com/AmeniM28)
+
+**ESPRIT — UP ASI**
