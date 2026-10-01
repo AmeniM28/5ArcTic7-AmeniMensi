@@ -61,16 +61,51 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             echo 'Pipeline reussi !'
+            emailext(
+                to: 'amenimensi91@gmail.com',
+                subject: "✅ Jenkins : Build #${BUILD_NUMBER} RÉUSSI",
+                body: """
+                    <h2>✅ Build Jenkins RÉUSSI</h2>
+                    <p><strong>Job :</strong> ${JOB_NAME}</p>
+                    <p><strong>Build :</strong> #${BUILD_NUMBER}</p>
+                    <p><strong>Statut :</strong> SUCCESS</p>
+                    <p><strong>Durée :</strong> ${currentBuild.durationString}</p>
+                    <p><a href="${BUILD_URL}console">Voir la console output</a></p>
+                """,
+                mimeType: 'text/html'
+            )
         }
         unstable {
-            echo 'Pipeline termine avec avertissements (push Docker partiel).'
+            echo 'Pipeline termine avec avertissements.'
+            emailext(
+                to: 'amenimensi91@gmail.com',
+                subject: "⚠️ Jenkins : Build #${BUILD_NUMBER} INSTABLE",
+                body: """
+                    <h2>⚠️ Build Jenkins INSTABLE</h2>
+                    <p><strong>Job :</strong> ${JOB_NAME}</p>
+                    <p><strong>Build :</strong> #${BUILD_NUMBER}</p>
+                    <p><strong>Statut :</strong> UNSTABLE (push Docker partiel)</p>
+                    <p><a href="${BUILD_URL}console">Voir la console output</a></p>
+                """,
+                mimeType: 'text/html'
+            )
         }
         failure {
             echo 'Pipeline echoue.'
+            emailext(
+                to: 'amenimensi91@gmail.com',
+                subject: "❌ Jenkins : Build #${BUILD_NUMBER} ÉCHOUÉ",
+                body: """
+                    <h2>❌ Build Jenkins ÉCHOUÉ</h2>
+                    <p><strong>Job :</strong> ${JOB_NAME}</p>
+                    <p><strong>Build :</strong> #${BUILD_NUMBER}</p>
+                    <p><strong>Statut :</strong> FAILURE</p>
+                    <p><a href="${BUILD_URL}console">Voir la console output</a></p>
+                """,
+                mimeType: 'text/html'
+            )
         }
-    }
-}
+    }}
