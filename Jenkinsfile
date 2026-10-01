@@ -52,8 +52,12 @@ pipeline {
             steps {
                 echo 'Push vers Docker Hub...'
                 sh "echo ${DOCKER_CREDENTIALS_PSW} | docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin"
-                sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
-                sh "docker push ${DOCKER_IMAGE}:latest"
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    retry(3) {
+                        sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
+                        sh "docker push ${DOCKER_IMAGE}:latest"
+                    }
+                }
             }
         }
     }
@@ -61,6 +65,9 @@ pipeline {
     post {
         success {
             echo 'Pipeline reussi !'
+        }
+        unstable {
+            echo 'Pipeline termine avec avertissements (push Docker partiel).'
         }
         failure {
             echo 'Pipeline echoue.'
