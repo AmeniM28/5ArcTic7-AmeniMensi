@@ -61,18 +61,19 @@ pipeline {
             }
         }
     }
+
     post {
         success {
             echo 'Pipeline reussi !'
             emailext(
                 to: 'amenimensi91@gmail.com',
-                subject: "✅ Jenkins : Build #${BUILD_NUMBER} RÉUSSI",
+                subject: "Jenkins : Build #${BUILD_NUMBER} REUSSI",
                 body: """
-                    <h2>✅ Build Jenkins RÉUSSI</h2>
+                    <h2>Build Jenkins REUSSI</h2>
                     <p><strong>Job :</strong> ${JOB_NAME}</p>
                     <p><strong>Build :</strong> #${BUILD_NUMBER}</p>
                     <p><strong>Statut :</strong> SUCCESS</p>
-                    <p><strong>Durée :</strong> ${currentBuild.durationString}</p>
+                    <p><strong>Duree :</strong> ${currentBuild.durationString}</p>
                     <p><a href="${BUILD_URL}console">Voir la console output</a></p>
                 """,
                 mimeType: 'text/html'
@@ -82,9 +83,9 @@ pipeline {
             echo 'Pipeline termine avec avertissements.'
             emailext(
                 to: 'amenimensi91@gmail.com',
-                subject: "⚠️ Jenkins : Build #${BUILD_NUMBER} INSTABLE",
+                subject: "Jenkins : Build #${BUILD_NUMBER} INSTABLE",
                 body: """
-                    <h2>⚠️ Build Jenkins INSTABLE</h2>
+                    <h2>Build Jenkins INSTABLE</h2>
                     <p><strong>Job :</strong> ${JOB_NAME}</p>
                     <p><strong>Build :</strong> #${BUILD_NUMBER}</p>
                     <p><strong>Statut :</strong> UNSTABLE (push Docker partiel)</p>
@@ -97,9 +98,9 @@ pipeline {
             echo 'Pipeline echoue.'
             emailext(
                 to: 'amenimensi91@gmail.com',
-                subject: "❌ Jenkins : Build #${BUILD_NUMBER} ÉCHOUÉ",
+                subject: "Jenkins : Build #${BUILD_NUMBER} ECHOUE",
                 body: """
-                    <h2>❌ Build Jenkins ÉCHOUÉ</h2>
+                    <h2>Build Jenkins ECHOUE</h2>
                     <p><strong>Job :</strong> ${JOB_NAME}</p>
                     <p><strong>Build :</strong> #${BUILD_NUMBER}</p>
                     <p><strong>Statut :</strong> FAILURE</p>
@@ -108,4 +109,5 @@ pipeline {
                 mimeType: 'text/html'
             )
         }
-    }}
+    }
+}
