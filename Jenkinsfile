@@ -12,39 +12,51 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Get code from Git') {
             steps {
-                echo 'Checkout du code...'
-                checkout scm
+                git branch: 'main',
+                    credentialsId: 'github-creds',
+                    url: 'https://github.com/HachemiFarah/5ARCTIC7_FarahHachemi.git'
             }
         }
 
-        stage('Build') {
+        stage('mvn clean') {
             steps {
-                echo 'Compilation avec Maven...'
-                dir('backend') {
-                    sh 'mvn clean package -DskipTests'
+                sh 'mvn clean'
+            }
+        }
+
+        stage('mvn compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+
+        stage('mvn test') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('mvn sonar:sonar') {
+            steps {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh 'mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN'
                 }
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('mvn package') {
             steps {
-                echo 'Analyse SonarQube...'
-                withSonarQubeEnv('SonarQube') {
-                    dir('backend') {
-                        sh 'mvn sonar:sonar'
-                    }
-                }
+                sh 'mvn package -DskipTests'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 echo 'Construction de l image Docker...'
-                dir('backend') {
-                    sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest ."
-                }
+                sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest ."
             }
         }
 
