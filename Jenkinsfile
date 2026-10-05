@@ -23,40 +23,52 @@ pipeline {
 
         stage('mvn clean') {
             steps {
-                sh 'mvn clean'
+                dir('backend') {
+                    sh 'mvn clean'
+                }
             }
         }
 
         stage('mvn compile') {
             steps {
-                sh 'mvn compile'
+                dir('backend') {
+                    sh 'mvn compile'
+                }
             }
         }
 
         stage('mvn test') {
             steps {
-                sh 'mvn test'
+                dir('backend') {
+                    sh 'mvn test'
+                }
             }
         }
 
         stage('mvn sonar:sonar') {
             steps {
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    sh 'mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN'
+                dir('backend') {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                        sh 'mvn sonar:sonar -Dsonar.login=$SONAR_TOKEN'
+                    }
                 }
             }
         }
 
         stage('mvn package') {
             steps {
-                sh 'mvn package -DskipTests'
+                dir('backend') {
+                    sh 'mvn package -DskipTests'
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 echo 'Construction de l image Docker...'
-                sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest ."
+                dir('backend') {
+                    sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -t ${DOCKER_IMAGE}:latest ."
+                }
             }
         }
 
