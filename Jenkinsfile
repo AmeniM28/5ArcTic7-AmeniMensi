@@ -17,7 +17,7 @@ pipeline {
             steps {
                 git branch: 'main',
                     credentialsId: 'github-creds',
-                    url: 'https://github.com/HachemiFarah/5ARCTIC7_FarahHachemi.git'
+                    url: 'https://github.com/AmeniM28/5ArcTic7-AmeniMensi.git'
             }
         }
 
